@@ -46,7 +46,7 @@ export async function setSessionCookie(token: string): Promise<void> {
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: isProd,
+        secure: process.env.NODE_ENV === "production" || !!process.env.VERCEL,
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
