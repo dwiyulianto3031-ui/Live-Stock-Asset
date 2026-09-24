@@ -19,12 +19,18 @@ export function useAuth() {
 
   useEffect(() => {
     let mounted = true;
-    fetch("/api/auth/me")
+    fetch("/api/auth/me", {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { "Cache-Control": "no-cache" },
+    })
       .then((r) => r.json())
       .then((d) => {
         if (mounted) setUser(d?.user ?? null);
       })
-      .catch(() => {})
+      .catch(() => {
+        if (mounted) setUser(null);
+      })
       .finally(() => {
         if (mounted) setLoading(false);
       });
