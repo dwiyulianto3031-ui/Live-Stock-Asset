@@ -40,15 +40,17 @@ export async function createSessionToken(user: SessionUser): Promise<string> {
 
 export async function setSessionCookie(token: string): Promise<void> {
   const cookieStore = await cookies();
+  // Di production (HTTPS / Vercel) cookie wajib secure:true,
+  // kalau tidak browser modern bisa menolak/menghapus cookie.
+  const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,
+    secure: isProd,
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
 }
-
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
