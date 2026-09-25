@@ -108,7 +108,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/logout")
+        fetch("/api/auth/me", {
+      cache: "no-store",
+      credentials: "same-origin",
+    })
       .then((r) => r.json())
       .then((d) => {
         if (d.user) setUser(d.user);
