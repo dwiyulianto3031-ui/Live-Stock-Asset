@@ -108,15 +108,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-        fetch("/api/auth/me", {
+    let mounted = true;
+    fetch("/api/auth/me", {
       cache: "no-store",
       credentials: "same-origin",
     })
       .then((r) => r.json())
       .then((d) => {
-        if (d.user) setUser(d.user);
+        if (mounted && d.user) setUser(d.user);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (mounted) setUser(null);
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   async function handleLogout() {

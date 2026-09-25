@@ -12,6 +12,7 @@ export type SessionUser = {
   username: string;
   fullName: string;
   role: "admin" | "pic" | "staff";
+  email?: string | null;
 };
 
 export async function hashPassword(password: string): Promise<string> {

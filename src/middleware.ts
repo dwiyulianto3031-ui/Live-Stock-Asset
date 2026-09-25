@@ -17,6 +17,7 @@ const PUBLIC_GET = [
   "/api/activity-chart",
   "/api/audit",
   "/api/diagnostic",
+  "/api/cron/stock-alert",
   "/api/source-zip",
   "/api/opname",
   "/api/stock-alerts",

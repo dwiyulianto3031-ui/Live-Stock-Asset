@@ -15,6 +15,8 @@ type LowItem = {
   total: number;
 };
 
+type AdminInfo = { email: string | null; username: string; role: string };
+
 type AlertHistory = {
   id: number;
   productSku: string | null;
@@ -36,6 +38,8 @@ export default function StockAlertsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [smtp, setSmtp] = useState<boolean | null>(null);
+  const [autoRecipients, setAutoRecipients] = useState<string[]>([]);
+  const [admins, setAdmins] = useState<AdminInfo[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,6 +50,8 @@ export default function StockAlertsPage() {
         setLow(d.lowStock ?? []);
         setHistory(d.history ?? []);
         setSmtp(d.smtpConfigured ?? false);
+        setAutoRecipients(d.autoRecipients ?? []);
+        setAdmins(d.admins ?? []);
       } else {
         setErr(d.error ?? "Gagal memuat");
       }
@@ -59,16 +65,22 @@ export default function StockAlertsPage() {
     else if (!authLoading && isGuest) setLoading(false);
   }, [authLoading, isGuest, load]);
 
-  async function send(e: FormEvent) {
-    e.preventDefault();
+  async function send(e: FormEvent, mode: "manual" | "auto" | "test" = "manual", testEmail?: string) {
+    e?.preventDefault?.();
     setSending(true);
     setErr(null);
     setMsg(null);
     try {
+      const payload =
+        mode === "auto"
+          ? { mode: "auto" }
+          : mode === "test"
+          ? { mode: "test", email: testEmail }
+          : { mode: "manual", recipients };
       const res = await fetch("/api/stock-alerts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipients }),
+        body: JSON.stringify(payload),
       });
       const d = await res.json();
       if (!res.ok) {
@@ -128,6 +140,8 @@ export default function StockAlertsPage() {
             <ul className="list-disc ml-5 mt-1 font-mono text-xs">
               <li>RESEND_API_KEY (gratis di resend.com)</li>
               <li>EMAIL_FROM (contoh: LIVE STOCK ASSET &lt;noreply@domainanda.com&gt;)</li>
+              <li>ALERT_EMAIL_TO (email tujuan auto-kirim, pisah koma)</li>
+              <li>CRON_SECRET (opsional, pengaman endpoint cron)</li>
             </ul>
             <p className="mt-1">
               Sementara ini tombol kirim akan mencatat notifikasi sebagai{" "}
@@ -153,6 +167,12 @@ export default function StockAlertsPage() {
               />
               <p className="text-xs text-slate-500 mt-1">
                 Kosongkan untuk mengirim ke email akun Anda sendiri.
+                {admins.length > 0 && (
+                  <>
+                    {" "}Admin terdaftar:{" "}
+                    <b>{admins.map((a) => a.email ?? a.username).join(", ")}</b>
+                  </>
+                )}
               </p>
             </div>
             <button
@@ -166,7 +186,32 @@ export default function StockAlertsPage() {
                 ? "Tidak Ada Stok Menipis"
                 : `Kirim Notifikasi (${low.length} produk menipis)`}
             </button>
+
+            {low.length > 0 && recipients.trim() && (
+              <button
+                type="button"
+                onClick={(e) => send(e, "test", recipients.trim())}
+                disabled={sending}
+                className="ml-2 px-5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50 disabled:opacity-50"
+              >
+                Tes Kirim ke Email Pertama
+              </button>
+            )}
           </form>
+          {autoRecipients.length > 0 && (
+            <div className="mt-3 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-lg p-3 text-xs">
+              <p className="font-semibold">Mode otomatis (cron) aktif ke:</p>
+              <p className="font-mono mt-0.5">{autoRecipients.join(", ")}</p>
+              <button
+                type="button"
+                onClick={(e) => send(e, "auto")}
+                disabled={sending}
+                className="mt-2 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-50"
+              >
+                {sending ? "Mengirim..." : "Kirim Sekarang ke Penerima Otomatis"}
+              </button>
+            </div>
+          )}
           {err && (
             <div className="mt-3 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
               {err}

@@ -2,9 +2,77 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { products, stockAlerts, users } from "@/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
-import { getSession } from "@/lib/auth";
+import { getSession, type SessionUser } from "@/lib/auth";
+import {
+  buildLowStockEmail,
+  sendEmail,
+  getAdminRecipients,
+  isSmtpConfigured,
+} from "@/lib/email";
 
-// GET /api/stock-alerts - daftar produk menipis + riwayat notifikasi terkirim
+export const dynamic = "force-dynamic";
+
+type LowItem = {
+  id: number;
+  sku: string;
+  name: string;
+  unit: string;
+  minStock: number;
+  newStock: number;
+  returnStock: number;
+  total: number;
+};
+
+// Ambil produk stok menipis
+async function getLowStock(): Promise<LowItem[]> {
+  const rows = await db
+    .select({
+      id: products.id,
+      sku: products.sku,
+      name: products.name,
+      unit: products.unit,
+      minStock: products.minStock,
+      newStock: products.newStock,
+      returnStock: products.returnStock,
+    })
+    .from(products)
+    .where(
+      and(
+        eq(products.isArchived, false),
+        sql`(${products.newStock} + ${products.returnStock}) <= ${products.minStock}`,
+      ),
+    )
+    .orderBy(products.name);
+
+  return rows.map((p) => ({
+    id: p.id,
+    sku: p.sku,
+    name: p.name,
+    unit: p.unit,
+    minStock: p.minStock,
+    newStock: p.newStock,
+    returnStock: p.returnStock,
+    total: p.newStock + p.returnStock,
+  }));
+}
+
+// Catat log pengiriman
+async function logAlerts(items: LowItem[], recipient: string, status: string) {
+  if (items.length === 0) return;
+  await db.insert(stockAlerts).values(
+    items.map((p) => ({
+      productId: p.id,
+      productSku: p.sku,
+      productName: p.name,
+      currentTotal: p.total,
+      minStock: p.minStock,
+      recipient,
+      status,
+    })),
+  );
+}
+
+// GET /api/stock-alerts - daftar menipis + riwayat notifikasi
 export async function GET(request: Request) {
   try {
     const user = await getSession();
@@ -15,38 +83,29 @@ export async function GET(request: Request) {
       );
     }
 
-    const lowStock = await db
-      .select({
-        id: products.id,
-        sku: products.sku,
-        name: products.name,
-        unit: products.unit,
-        minStock: products.minStock,
-        newStock: products.newStock,
-        returnStock: products.returnStock,
-      })
-      .from(products)
-      .where(
-        and(
-          eq(products.isArchived, false),
-          sql`(${products.newStock} + ${products.returnStock}) <= ${products.minStock}`,
-        ),
-      )
-      .orderBy(products.name);
+    const url = new URL(request.url);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
 
-    const history = await db
-      .select()
-      .from(stockAlerts)
-      .orderBy(desc(stockAlerts.sentAt))
-      .limit(50);
+    const [lowStock, history, admins] = await Promise.all([
+      getLowStock(),
+      db
+        .select()
+        .from(stockAlerts)
+        .orderBy(desc(stockAlerts.sentAt))
+        .limit(limit),
+      db
+        .select({ email: users.email, username: users.username, role: users.role })
+        .from(users),
+    ]);
 
     return NextResponse.json({
-      lowStock: lowStock.map((p) => ({
-        ...p,
-        total: p.newStock + p.returnStock,
-      })),
+      lowStock,
       history,
-      smtpConfigured: !!process.env.RESEND_API_KEY,
+      admins: admins
+        .filter((a) => a.role === "admin" && a.email)
+        .map((a) => a.email),
+      smtpConfigured: isSmtpConfigured(),
+      autoRecipients: getAdminRecipients(),
     });
   } catch (err) {
     console.error(err);
@@ -57,177 +116,103 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/stock-alerts - kirim notifikasi email stok menipis
-// Body: { recipients: "a@b.com,c@d.com" }
+// POST /api/stock-alerts
+// mode:
+//  - "auto"    : kirim ke ALERT_EMAIL_TO / email admin (dipakai cron)
+//  - "manual"  : kirim ke email yang diketik user (default)
+//  - "test"    : tes kirim ke 1 email
 export async function POST(request: Request) {
   try {
-    const user = await getSession();
-    if (!user) {
-      return NextResponse.json({ error: "Silakan login" }, { status: 401 });
+    const user: SessionUser | null = await getSession().catch(() => null);
+    const body = await request.json().catch(() => ({}));
+    const mode = body.mode === "auto" ? "auto" : body.mode === "test" ? "test" : "manual";
+
+    // Auto mode (cron) tidak butuh session; manual/test wajib login
+    if (mode !== "auto") {
+      const auth = await getSession();
+      if (!auth) {
+        return NextResponse.json({ error: "Silakan login" }, { status: 401 });
+      }
     }
 
-    const body = await request.json().catch(() => ({}));
-    let recipients: string[] = Array.isArray(body.recipients)
-      ? body.recipients.map((r: any) => String(r).trim()).filter(Boolean)
-      : String(body.recipients ?? "")
-          .split(/[,\n;]/)
-          .map((r: string) => r.trim())
-          .filter(Boolean);
+    const lowStock = await getLowStock();
 
-    // Fallback: pakai email user yang login
-    if (recipients.length === 0) {
-      const me = await db
-        .select({ email: users.email })
-        .from(users)
-        .where(eq(users.id, user.id))
-        .limit(1);
-      if (me[0]?.email) recipients = [me[0].email];
+    if (lowStock.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        sent: 0,
+        message: "Semua stok aman. Tidak ada produk menipis — tidak ada email dikirim.",
+      });
+    }
+
+    // Tentukan penerima
+    let recipients: string[] = [];
+    if (mode === "test") {
+      recipients = [String(body.email ?? "").trim()].filter(Boolean);
+      if (!recipients[0]) {
+        return NextResponse.json({ error: "Isi email tujuan untuk tes" }, { status: 400 });
+      }
+    } else if (mode === "auto") {
+      recipients = getAdminRecipients();
+      if (recipients.length === 0) {
+        const admins = await db
+          .select({ email: users.email })
+          .from(users)
+          .where(and(eq(users.role, "admin"), sql`${users.email} IS NOT NULL`));
+        recipients = admins.map((a) => a.email!).filter(Boolean);
+      }
+    } else {
+      const raw = body.recipients ?? body.email ?? "";
+      recipients = String(raw)
+        .split(/[,\n;]/)
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      if (recipients.length === 0) {
+        if (user?.email) recipients = [user.email];
+      }
     }
 
     if (recipients.length === 0) {
       return NextResponse.json(
         {
           error:
-            "Tidak ada alamat email tujuan. Isi email di form atau tambahkan email pada profil user.",
+            "Tidak ada alamat email tujuan. Isi kolom email, atau set ALERT_EMAIL_TO di Vercel untuk auto-kirim.",
         },
         { status: 400 },
       );
     }
 
-    // Ambil produk yang stoknya menipis
-    const lowStock = await db
-      .select()
-      .from(products)
-      .where(
-        and(
-          eq(products.isArchived, false),
-          sql`(${products.newStock} + ${products.returnStock}) <= ${products.minStock}`,
-        ),
-      )
-      .orderBy(products.name);
+    const { subject, html } = buildLowStockEmail(lowStock);
+    const recipientStr = recipients.join(", ");
+    const recipLog = recipientStr.slice(0, 150);
 
-    if (lowStock.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        sent: 0,
-        message: "Tidak ada produk dengan stok menipis. Tidak ada email dikirim.",
-      });
-    }
+    // Kirim
+    const { sent, errors } = await sendEmail(recipients, subject, html);
+    const status = sent > 0 ? "sent" : isSmtpConfigured() ? "failed" : "pending";
 
-    const apiKey = process.env.RESEND_API_KEY;
-    const from = process.env.EMAIL_FROM ?? "LIVE STOCK ASSET <onboarding@resend.dev>";
-
-    if (!apiKey) {
-      // Catat sebagai pending karena SMTP belum dikonfigurasi
-      await db.insert(stockAlerts).values(
-        lowStock.map((p) => ({
-          productId: p.id,
-          productSku: p.sku,
-          productName: p.name,
-          currentTotal: p.newStock + p.returnStock,
-          minStock: p.minStock,
-          recipient: recipients.join(", "),
-          status: "pending",
-        })),
-      );
-
-      return NextResponse.json(
-        {
-          ok: false,
-          sent: 0,
-          logged: lowStock.length,
-          smtpConfigured: false,
-          message:
-            "Email server belum dikonfigurasi. Tambahkan RESEND_API_KEY & EMAIL_FROM di Environment Variables Vercel. Notifikasi dicatat sebagai 'pending'.",
-          lowStock: lowStock.map((p) => ({
-            sku: p.sku,
-            name: p.name,
-            total: p.newStock + p.returnStock,
-            min: p.minStock,
-          })),
-        },
-        { status: 200 },
-      );
-    }
-
-    // Kirim via Resend
-    const rows = lowStock
-      .map(
-        (p) =>
-          `<tr><td style="padding:6px 10px;border:1px solid #eee">${p.sku}</td>` +
-          `<td style="padding:6px 10px;border:1px solid #eee">${p.name}</td>` +
-          `<td style="padding:6px 10px;border:1px solid #eee;text-align:right;color:#dc2626;font-weight:700">${p.newStock + p.returnStock} ${p.unit}</td>` +
-          `<td style="padding:6px 10px;border:1px solid #eee;text-align:right">${p.minStock} ${p.unit}</td></tr>`,
-      )
-      .join("");
-
-    const html = `
-      <div style="font-family:Arial,sans-serif;max-width:640px">
-        <h2 style="color:#b91c1c">Peringatan Stok Menipis</h2>
-        <p>Berikut produk yang stoknya mencapai atau di bawah batas minimum:</p>
-        <table style="border-collapse:collapse;width:100%;font-size:14px">
-          <thead>
-            <tr style="background:#f8fafc">
-              <th style="padding:8px 10px;border:1px solid #eee;text-align:left">SKU</th>
-              <th style="padding:8px 10px;border:1px solid #eee;text-align:left">Nama</th>
-              <th style="padding:8px 10px;border:1px solid #eee">Stok</th>
-              <th style="padding:8px 10px;border:1px solid #eee">Minimum</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <p style="margin-top:16px;font-size:12px;color:#64748b">
-          Dikirim otomatis oleh LIVE STOCK ASSET pada ${new Date().toLocaleString("id-ID")}
-        </p>
-      </div>`;
-
-    let sent = 0;
-    const errors: string[] = [];
-
-    for (const to of recipients) {
-      try {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from,
-            to,
-            subject: `Peringatan Stok Menipis (${lowStock.length} produk)`,
-            html,
-          }),
-        });
-        if (res.ok) sent++;
-        else {
-          const t = await res.text();
-          errors.push(`${to}: ${t.slice(0, 100)}`);
-        }
-      } catch (e: any) {
-        errors.push(`${to}: ${String(e?.message ?? e).slice(0, 100)}`);
-      }
-    }
-
-    await db.insert(stockAlerts).values(
-      lowStock.map((p) => ({
-        productId: p.id,
-        productSku: p.sku,
-        productName: p.name,
-        currentTotal: p.newStock + p.returnStock,
-        minStock: p.minStock,
-        recipient: recipients.join(", "),
-        status: sent > 0 ? "sent" : "failed",
-      })),
-    );
+    await logAlerts(lowStock, recipLog, status);
 
     return NextResponse.json({
       ok: sent > 0,
+      mode,
       sent,
-      total: recipients.length,
-      logged: lowStock.length,
+      totalRecipients: recipients.length,
+      products: lowStock.length,
+      status,
       errors,
-      smtpConfigured: true,
+      smtpConfigured: isSmtpConfigured(),
+      message:
+        sent > 0
+          ? `Notifikasi terkirim ke ${sent}/${recipients.length} email untuk ${lowStock.length} produk menipis.`
+          : isSmtpConfigured()
+          ? `Gagal mengirim: ${errors.join(" | ")}`
+          : "Email server belum dikonfigurasi (RESEND_API_KEY). Notifikasi dicatat sebagai pending.",
+      lowStock: lowStock.map((p) => ({
+        sku: p.sku,
+        name: p.name,
+        total: p.total,
+        min: p.minStock,
+      })),
     });
   } catch (err) {
     console.error(err);
