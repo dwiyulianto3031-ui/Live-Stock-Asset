@@ -3,9 +3,11 @@ import { pool, dbInfo } from "@/db";
 
 export const dynamic = "force-dynamic";
 
+// GET /api/diagnostic - Cek koneksi database & status tabel
 export async function GET() {
   const checks: Record<string, any> = {};
 
+  // 1. Environment variables
   checks.env = {
     DATABASE_URL_set: !!process.env.DATABASE_URL,
     DATABASE_URL_masked: process.env.DATABASE_URL
@@ -17,8 +19,10 @@ export async function GET() {
     VERCEL: !!process.env.VERCEL,
   };
 
+  // 2. Konfigurasi pool
   checks.pool = dbInfo;
 
+  // 3. Test koneksi
   try {
     const r = await pool.query("SELECT current_database() as db, version() as v");
     checks.connection = {
@@ -35,13 +39,14 @@ export async function GET() {
     return NextResponse.json(
       {
         status: "CONNECTION_FAILED",
-        fix: "Cek DATABASE_URL di Vercel. Gunakan Transaction pooler Supabase (port 6543).",
+        fix: "Cek DATABASE_URL di Vercel. Gunakan Session/Transaction pooler Supabase (host .pooler.supabase.com).",
         checks,
       },
       { status: 500 },
     );
   }
 
+  // 4. Cek tabel
   const tables = ["users", "products", "stock_movements", "audit_logs"];
   const tableStatus: Record<string, any> = {};
   for (const t of tables) {
@@ -58,11 +63,12 @@ export async function GET() {
   checks.tables = tableStatus;
 
   const allOk = tables.every((t) => tableStatus[t]?.exists);
+
   return NextResponse.json({
     status: allOk ? "OK" : "TABLES_MISSING",
     fix: allOk
       ? "Semua tabel siap. Silakan daftar akun di /register."
-      : "Tabel belum dibuat. Jalankan SQL di Supabase SQL Editor (lihat DEPLOYMENT.md).",
+      : "Tabel belum dibuat. Jalankan SQL di Supabase SQL Editor (lihat DEPLOYMENT.md), pilih 'Run without RLS'.",
     checks,
   });
 }

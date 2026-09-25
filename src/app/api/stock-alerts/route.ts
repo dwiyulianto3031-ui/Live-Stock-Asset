@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     }
 
     const apiKey = process.env.RESEND_API_KEY;
-    const from = process.env.EMAIL_FROM ?? "GudangPro <onboarding@resend.dev>";
+    const from = process.env.EMAIL_FROM ?? "LIVE STOCK ASSET <onboarding@resend.dev>";
 
     if (!apiKey) {
       // Catat sebagai pending karena SMTP belum dikonfigurasi
@@ -177,7 +177,7 @@ export async function POST(request: Request) {
           <tbody>${rows}</tbody>
         </table>
         <p style="margin-top:16px;font-size:12px;color:#64748b">
-          Dikirim otomatis oleh GudangPro pada ${new Date().toLocaleString("id-ID")}
+          Dikirim otomatis oleh LIVE STOCK ASSET pada ${new Date().toLocaleString("id-ID")}
         </p>
       </div>`;
 

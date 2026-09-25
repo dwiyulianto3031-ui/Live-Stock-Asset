@@ -45,9 +45,8 @@ export async function POST(request: Request) {
     const email = body.email ? String(body.email).trim() : null;
     const passwordHash = await hashPassword(password);
 
-    const userCount = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(users);
+    // Cek apakah ini user pertama (akan jadi admin, sisanya PIC)
+    const userCount = await db.select({ count: sql<number>`count(*)::int` }).from(users);
     const isFirstUser = (userCount[0]?.count ?? 0) === 0;
     const role = isFirstUser ? "admin" : "pic";
 
@@ -71,7 +70,7 @@ export async function POST(request: Request) {
       id: user.id,
       username: user.username,
       fullName: user.fullName,
-      role: user.role as "admin" | "pic" | "staff",
+      role: user.role as "admin" | "pic",
     });
     await setSessionCookie(token);
 
@@ -97,40 +96,47 @@ export async function POST(request: Request) {
     console.error("REGISTER ERROR:", err);
     const msg = String(err?.message ?? err ?? "");
 
+    // Berikan pesan yang spesifik supaya mudah diperbaiki
     if (msg.includes("relation") && msg.includes("does not exist")) {
       return NextResponse.json(
         {
           error:
-            "Tabel database belum dibuat. Jalankan SQL di Supabase SQL Editor.",
+            "Tabel database belum dibuat. Buka Supabase > SQL Editor > jalankan SQL dari DEPLOYMENT.md",
         },
         { status: 500 },
       );
     }
     if (
       msg.includes("password authentication failed") ||
+      msg.includes("Authentication failed") ||
       msg.includes("28P01")
     ) {
       return NextResponse.json(
         {
           error:
-            "Password database salah. Cek DATABASE_URL di Vercel (Settings > Environment Variables).",
+            "Password database salah. Cek ulang DATABASE_URL di Vercel (Settings > Environment Variables)",
         },
         { status: 500 },
       );
     }
-    if (msg.includes("ENOTFOUND") || msg.includes("ETIMEDOUT")) {
+    if (
+      msg.includes("getaddrinfo ENOTFOUND") ||
+      msg.includes("ENOTFOUND") ||
+      msg.includes("ETIMEDOUT") ||
+      msg.includes("connect ECONNREFUSED")
+    ) {
       return NextResponse.json(
         {
           error:
-            "Tidak bisa terhubung ke database. Cek host DATABASE_URL.",
+            "Tidak bisa terhubung ke database. Host di DATABASE_URL kemungkinan salah.",
         },
         { status: 500 },
       );
     }
-    if (msg.includes("duplicate key") && msg.includes("username")) {
+    if (msg.includes("SSL") || msg.includes("certificate")) {
       return NextResponse.json(
-        { error: "Username sudah terdaftar" },
-        { status: 409 },
+        { error: "Masalah koneksi SSL ke database. Cek connection string." },
+        { status: 500 },
       );
     }
 

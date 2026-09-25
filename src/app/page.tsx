@@ -204,17 +204,19 @@ export default function DashboardPage() {
       {/* Stats cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard
+          href="/products"
           label="Total Produk"
           value={formatNumber(stats?.totalProducts ?? 0)}
           sub="Jenis barang terdaftar"
           color="from-indigo-500 to-purple-600"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z M3 7.5 12 12l9-4.5 M12 12v9" />
             </svg>
           }
         />
         <StatCard
+          href="/products"
           label="Total Stok"
           value={formatNumber(stats?.totalStock ?? 0)}
           sub="Unit barang tersedia"
@@ -226,17 +228,19 @@ export default function DashboardPage() {
           }
         />
         <StatCard
+          href="/products"
           label="Stok Baru"
           value={formatNumber(stats?.totalNewStock ?? 0)}
           sub="Unit kondisi baru"
           color="from-emerald-400 to-green-600"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z M3 7.5 12 12l9-4.5 M12 12v9" />
             </svg>
           }
         />
         <StatCard
+          href="/products"
           label="Stok Retur"
           value={formatNumber(stats?.totalReturnStock ?? 0)}
           sub="Unit kondisi retur"
@@ -248,6 +252,7 @@ export default function DashboardPage() {
           }
         />
         <StatCard
+          href="/movements"
           label="Masuk Hari Ini"
           value={`+${formatNumber(stats?.inflowToday ?? 0)}`}
           sub="Unit ditambahkan"
@@ -259,6 +264,7 @@ export default function DashboardPage() {
           }
         />
         <StatCard
+          href="/movements"
           label="Keluar Hari Ini"
           value={`-${formatNumber(stats?.outflowToday ?? 0)}`}
           sub="Unit digunakan"
@@ -576,25 +582,33 @@ function StatCard({
   sub,
   color,
   icon,
+  href,
 }: {
   label: string;
   value: string;
   sub: string;
   color: string;
   icon: React.ReactNode;
+  href: string;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition">
+    <Link
+      href={href}
+      className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg hover:border-indigo-300 hover:-translate-y-0.5 transition group block"
+    >
       <div className="flex items-start justify-between mb-3">
         <div
-          className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color} text-white flex items-center justify-center shadow-md`}
+          className={`w-11 h-11 rounded-xl bg-gradient-to-br ${color} text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform`}
         >
           {icon}
         </div>
+        <span className="text-xs font-semibold text-slate-300 group-hover:text-indigo-500 transition-colors">
+          Buka →
+        </span>
       </div>
       <p className="text-2xl lg:text-3xl font-bold text-slate-900">{value}</p>
       <p className="text-sm font-semibold text-slate-700 mt-1">{label}</p>
       <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
-    </div>
+    </Link>
   );
 }

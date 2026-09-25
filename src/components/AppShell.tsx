@@ -108,7 +108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/me")
+    fetch("/api/auth/logout")
       .then((r) => r.json())
       .then((d) => {
         if (d.user) setUser(d.user);
@@ -131,14 +131,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         <div className="p-5 border-b border-slate-700/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            <div className="relative w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/40 overflow-hidden">
+              <svg className="relative w-6 h-6 text-white drop-shadow" fill="none" stroke="currentColor" strokeWidth="1.9" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z" />
+                <path d="M3 7.5 12 12l9-4.5" />
+                <path d="M12 12v9" />
               </svg>
             </div>
             <div className="flex-1">
-              <h1 className="font-bold text-lg leading-none">GudangPro</h1>
-              <p className="text-xs text-slate-400 mt-0.5">Warehouse Manager</p>
+              <h1 className="font-extrabold text-[15px] leading-none tracking-tight">
+                LIVE <span className="bg-gradient-to-r from-indigo-300 to-pink-300 bg-clip-text text-transparent">STOCK</span> ASSET
+              </h1>
+              <p className="text-[10px] text-slate-400 mt-1 tracking-widest uppercase">Asset Manager</p>
             </div>
             <button
               onClick={() => setMenuOpen(false)}
@@ -238,14 +242,18 @@ export function AppShell({ children }: { children: ReactNode }) {
               </svg>
             </button>
             <div className="hidden sm:flex items-center gap-2 lg:hidden xl:flex">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 flex items-center justify-center shadow-md shadow-indigo-500/30 overflow-hidden">
+                <svg className="relative w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="1.9" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z" />
+                  <path d="M3 7.5 12 12l9-4.5" />
+                  <path d="M12 12v9" />
                 </svg>
               </div>
               <div>
-                <h1 className="font-bold text-base leading-none">GudangPro</h1>
-                <p className="text-[10px] text-slate-500 mt-0.5">Warehouse Manager</p>
+                <h1 className="font-extrabold text-sm leading-none tracking-tight">
+                  LIVE STOCK <span className="text-indigo-500">ASSET</span>
+                </h1>
+                <p className="text-[10px] text-slate-500 mt-0.5 tracking-wider uppercase">Asset Manager</p>
               </div>
             </div>
           </div>

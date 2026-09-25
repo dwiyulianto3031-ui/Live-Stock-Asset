@@ -51,7 +51,7 @@ export default function RegisterPage() {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z M3 7.5 12 12l9-4.5 M12 12v9"
               />
             </svg>
           </div>

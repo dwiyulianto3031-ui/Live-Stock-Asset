@@ -127,7 +127,7 @@ export default function StockAlertsPage() {
             </p>
             <ul className="list-disc ml-5 mt-1 font-mono text-xs">
               <li>RESEND_API_KEY (gratis di resend.com)</li>
-              <li>EMAIL_FROM (contoh: GudangPro &lt;noreply@domainanda.com&gt;)</li>
+              <li>EMAIL_FROM (contoh: LIVE STOCK ASSET &lt;noreply@domainanda.com&gt;)</li>
             </ul>
             <p className="mt-1">
               Sementara ini tombol kirim akan mencatat notifikasi sebagai{" "}

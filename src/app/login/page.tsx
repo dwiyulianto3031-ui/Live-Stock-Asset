@@ -39,23 +39,31 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/30 mb-4">
+          <div className="relative inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 shadow-xl shadow-indigo-500/40 mb-4 overflow-hidden">
             <svg
-              className="w-9 h-9 text-white"
+              className="relative w-9 h-9 text-white drop-shadow"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="1.8"
               viewBox="0 0 24 24"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-              />
+              <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z" />
+              <path d="M3 7.5 12 12l9-4.5" />
+              <path d="M12 12v9" />
+              <path d="M7.5 5.25 16.5 9.75" opacity=".7" strokeWidth="1.4" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white">GudangPro</h1>
-          <p className="text-slate-400 mt-1">Sistem Manajemen Stok Gudang</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">
+            LIVE STOCK{" "}
+            <span className="bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">
+              ASSET
+            </span>
+          </h1>
+          <p className="text-slate-400 mt-1 tracking-wider uppercase text-xs">
+            Asset Management System
+          </p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
@@ -122,7 +130,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-slate-500 text-xs mt-6">
-          © 2026 GudangPro. Dibuat dengan Next.js & PostgreSQL
+          © 2026 LIVE STOCK ASSET. Dibuat dengan Next.js & PostgreSQL
         </p>
       </div>
     </div>

@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       id: user.id,
       username: user.username,
       fullName: user.fullName,
-      role: user.role as "admin" | "pic" | "staff",
+      role: user.role as "admin" | "staff",
     });
     await setSessionCookie(token);
 
@@ -72,38 +72,27 @@ export async function POST(request: Request) {
   } catch (err: any) {
     console.error("LOGIN ERROR:", err);
     const msg = String(err?.message ?? err ?? "");
-
     if (msg.includes("relation") && msg.includes("does not exist")) {
       return NextResponse.json(
         {
           error:
-            "Tabel database belum dibuat. Jalankan SQL di Supabase SQL Editor.",
+            "Tabel database belum dibuat. Buka Supabase > SQL Editor > jalankan SQL dari DEPLOYMENT.md",
         },
         { status: 500 },
       );
     }
-    if (
-      msg.includes("password authentication failed") ||
-      msg.includes("28P01")
-    ) {
+    if (msg.includes("password authentication failed") || msg.includes("28P01")) {
       return NextResponse.json(
-        {
-          error:
-            "Password database salah. Cek DATABASE_URL di Vercel (Settings > Environment Variables).",
-        },
+        { error: "Password database salah. Cek DATABASE_URL di Vercel." },
         { status: 500 },
       );
     }
     if (msg.includes("ENOTFOUND") || msg.includes("ETIMEDOUT")) {
       return NextResponse.json(
-        {
-          error:
-            "Tidak bisa terhubung ke database. Cek host DATABASE_URL.",
-        },
+        { error: "Tidak bisa terhubung ke database. Cek host DATABASE_URL." },
         { status: 500 },
       );
     }
-
     return NextResponse.json(
       { error: `Gagal login: ${msg.slice(0, 200)}` },
       { status: 500 },

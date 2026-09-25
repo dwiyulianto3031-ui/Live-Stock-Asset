@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { SESSION_COOKIE } from "@/lib/auth";
 
-// Endpoint GET yang boleh diakses tanpa login (read-only publik)
+// Endpoint yang boleh diakses tanpa login (read-only publik)
 const PUBLIC_GET = [
   "/api/health",
   "/api/auth/me",
@@ -29,7 +29,8 @@ const PUBLIC_GET = [
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "gudang-secret-dev-change-me-please-32chars!!",
+  process.env.JWT_SECRET ??
+    "gudang-secret-dev-change-me-please-32chars!!",
 );
 
 async function isAuthed(req: NextRequest): Promise<boolean> {
@@ -47,8 +48,9 @@ export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   const method = req.method.toUpperCase();
 
-  // 1. Method WRITE (POST/PUT/PATCH/DELETE) wajib login
+  // 1. Semua method WRITE (POST/PUT/PATCH/DELETE) wajib login
   if (WRITE_METHODS.has(method)) {
+    // Endpoint auth (login/register/logout) dikecualikan
     const isAuthEndpoint =
       pathname.startsWith("/api/auth/login") ||
       pathname.startsWith("/api/auth/register") ||
@@ -70,13 +72,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. GET/HEAD: hanya endpoint publik (read-only) yang diizinkan
+  // 2. Method GET/HEAD: izinkan hanya untuk endpoint publik (read-only)
   if (method === "GET" || method === "HEAD") {
     const isPublic = PUBLIC_GET.some(
-      (p) => pathname === p || pathname.startsWith(p + "/"),
+      (p) => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p),
     );
     if (isPublic) return NextResponse.next();
 
+    // Endpoint API lain yang tidak terdaftar -> tolak
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { error: "Endpoint tidak tersedia.", code: "NOT_FOUND" },
@@ -88,6 +91,7 @@ export async function middleware(req: NextRequest) {
 
   return NextResponse.next();
 }
+
 
 export const config = {
   matcher: ["/api/:path*"],

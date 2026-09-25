@@ -46,11 +46,12 @@ export async function setSessionCookie(token: string): Promise<void> {
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-        secure: process.env.NODE_ENV === "production" || !!process.env.VERCEL,
+    secure: isProd,
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
 }
+
 export async function clearSessionCookie(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
