@@ -50,6 +50,7 @@ export async function GET(request: Request) {
         resi: stockMovements.resi,
         driveLink: stockMovements.driveLink,
         note: stockMovements.note,
+        isRevised: stockMovements.isRevised,
         createdAt: stockMovements.createdAt,
         userName: users.fullName,
       })

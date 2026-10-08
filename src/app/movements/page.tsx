@@ -38,6 +38,7 @@ type Movement = {
   resis: string[];
   driveLink: string | null;
   note: string | null;
+  isRevised?: boolean;
   createdAt: string;
   userName: string;
 };
@@ -60,6 +61,11 @@ export default function MovementsPage() {
   const { isGuest } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [page, setPage] = useState(1);
+  const [revData, setRevData] = useState<any | null>(null);
+  const [revLoading, setRevLoading] = useState(false);
+  const [revSaving, setRevSaving] = useState(false);
+  const [revMsg, setRevMsg] = useState<string | null>(null);
+  const [revErr, setRevErr] = useState<string | null>(null);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -306,6 +312,70 @@ export default function MovementsPage() {
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serialNumbersText, productId, type]);
+
+  async function openRevision(m: Movement) {
+    setRevErr(null);
+    setRevMsg(null);
+    setRevLoading(true);
+    try {
+      const res = await fetch(`/api/movements/review?id=${m.id}`);
+      const d = await res.json();
+      if (!res.ok) {
+        setRevErr(d.error ?? "Gagal memuat");
+        return;
+      }
+      setRevData(d.movement);
+    } catch {
+      setRevErr("Kesalahan jaringan");
+    } finally {
+      setRevLoading(false);
+    }
+  }
+
+  async function saveRevision() {
+    if (!revData) return;
+    setRevSaving(true);
+    setRevErr(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/movements/review?id=${revData.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: revData.productId,
+          type: revData.type,
+          source: revData.source,
+          quantity: revData.quantity,
+          storeName: revData.storeName,
+          ticketNo: revData.type === "out" ? revData.ticketNo : null,
+          poNumber: revData.type === "in" ? revData.ticketNo : null,
+          serialNumbers: revData.serialNumbers,
+          barcodes: revData.barcodes,
+          resi: revData.resis,
+          itemType: revData.itemType,
+          assetStatus: revData.assetStatus,
+          note: revData.note,
+          date: revData.createdAt,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setRevErr(d.error ?? "Gagal revisi");
+        return;
+      }
+      setRevMsg(d.message ?? "Revisi berhasil");
+      setRevData(null);
+      await Promise.all([loadProducts(), loadMovements()]);
+    } catch {
+      setRevErr("Kesalahan jaringan");
+    } finally {
+      setRevSaving(false);
+    }
+  }
+
+  function updateRev(patch: any) {
+    setRevData((prev: any) => ({ ...prev, ...patch }));
+  }
 
   return (
     <AppShell>
@@ -937,6 +1007,7 @@ export default function MovementsPage() {
                     <th className="px-3 py-3 text-right whitespace-nowrap">Jumlah</th>
                     <th className="px-3 py-3 text-left whitespace-nowrap">Tanggal</th>
                     <th className="px-3 py-3 text-left whitespace-nowrap">Oleh</th>
+                    <th className="px-3 py-3 text-left whitespace-nowrap">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1095,6 +1166,20 @@ export default function MovementsPage() {
                       <td className="px-3 py-3 text-slate-600 text-xs whitespace-nowrap">
                         {m.userName}
                       </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {m.isRevised ? (
+                          <span className="text-[10px] font-semibold bg-slate-100 text-slate-500 px-2 py-1 rounded">
+                            Direvisi
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => openRevision(m)}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                          >
+                            Revisi
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1111,6 +1196,264 @@ export default function MovementsPage() {
           )}
         </div>
       </div>
+
+      {/* ===== MODAL REVISI TRANSAKSI ===== */}
+      {revData && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto"
+          onClick={() => setRevData(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-10">
+              <div>
+                <h2 className="font-bold text-slate-900">
+                  Revisi Transaksi #{revData.id}
+                </h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Stok akan dikoreksi otomatis (rollback lama + terapkan baru). Tercatat di Audit Log.
+                </p>
+              </div>
+              <button
+                onClick={() => setRevData(null)}
+                className="p-2 rounded-lg hover:bg-slate-100"
+                aria-label="Tutup"
+              >
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {revLoading ? (
+              <div className="p-12 text-center text-slate-500">Memuat...</div>
+            ) : (
+              <div className="p-5 max-h-[calc(100vh-220px)] overflow-y-auto space-y-3">
+                {revErr && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+                    {revErr}
+                  </div>
+                )}
+                {revMsg && (
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg p-3 text-sm">
+                    {revMsg}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateRev({ type: "in" })}
+                    className={`py-2.5 rounded-lg font-semibold text-sm border ${
+                      revData.type === "in"
+                        ? "bg-emerald-50 border-emerald-500 text-emerald-700"
+                        : "bg-white border-slate-300 text-slate-600"
+                    }`}
+                  >
+                    Masuk
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateRev({ type: "out" })}
+                    className={`py-2.5 rounded-lg font-semibold text-sm border ${
+                      revData.type === "out"
+                        ? "bg-red-50 border-red-500 text-red-700"
+                        : "bg-white border-slate-300 text-slate-600"
+                    }`}
+                  >
+                    Keluar
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Produk *
+                  </label>
+                  <select
+                    value={revData.productId}
+                    onChange={(e) => updateRev({ productId: Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  >
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.sku} - {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Sumber Stok
+                    </label>
+                    <select
+                      value={revData.source}
+                      onChange={(e) => updateRev({ source: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="new">Baru</option>
+                      <option value="return">Retur</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Jumlah *
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={revData.quantity}
+                      onChange={(e) => updateRev({ quantity: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {revData.type === "out" && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nama Gerai <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={revData.storeName ?? ""}
+                      onChange={(e) => updateRev({ storeName: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    {revData.type === "in" ? "No PO" : "No Ticket"}
+                  </label>
+                  <input
+                    type="text"
+                    value={revData.ticketNo ?? ""}
+                    onChange={(e) => updateRev({ ticketNo: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Resi (1 baris = 1 resi/link)
+                  </label>
+                  <textarea
+                    value={(revData.resis ?? []).join("\n")}
+                    onChange={(e) =>
+                      updateRev({
+                        resis: e.target.value.split("\n").map((s: string) => s.trim()).filter(Boolean),
+                      })
+                    }
+                    rows={2}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Serial Number (1 baris = 1 SN)
+                  </label>
+                  <textarea
+                    value={(revData.serialNumbers ?? []).join("\n")}
+                    onChange={(e) =>
+                      updateRev({
+                        serialNumbers: e.target.value.split("\n").map((s: string) => s.trim()).filter(Boolean),
+                      })
+                    }
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Barcode (1 baris = 1 barcode)
+                  </label>
+                  <textarea
+                    value={(revData.barcodes ?? []).join("\n")}
+                    onChange={(e) =>
+                      updateRev({
+                        barcodes: e.target.value.split("\n").map((s: string) => s.trim()).filter(Boolean),
+                      })
+                    }
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Tanggal
+                    </label>
+                    <input
+                      type="date"
+                      value={new Date(revData.createdAt).toISOString().slice(0, 10)}
+                      onChange={(e) => updateRev({ createdAt: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Status Asset
+                    </label>
+                    <select
+                      value={revData.assetStatus ?? ""}
+                      onChange={(e) => updateRev({ assetStatus: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="">-</option>
+                      <option value="Baik">Baik</option>
+                      <option value="Rusak">Rusak</option>
+                      <option value="Service">Service</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Catatan
+                  </label>
+                  <textarea
+                    value={revData.note ?? ""}
+                    onChange={(e) => updateRev({ note: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                  Revisi hanya dapat dilakukan <b>1 kali</b> per transaksi. Perubahan
+                  tercatat di Audit Log dengan detail sebelum/sesudah.
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRevData(null)}
+                    className="flex-1 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-semibold"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveRevision}
+                    disabled={revSaving}
+                    className="flex-1 py-2.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold disabled:opacity-60"
+                  >
+                    {revSaving ? "Menyimpan..." : "Simpan Revisi"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

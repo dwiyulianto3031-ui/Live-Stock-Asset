@@ -55,7 +55,8 @@ export async function middleware(req: NextRequest) {
     const isAuthEndpoint =
       pathname.startsWith("/api/auth/login") ||
       pathname.startsWith("/api/auth/register") ||
-      pathname.startsWith("/api/auth/logout");
+      pathname.startsWith("/api/auth/logout") ||
+      pathname.startsWith("/api/auth/reset-password");
 
     if (!isAuthEndpoint) {
       const ok = await isAuthed(req);

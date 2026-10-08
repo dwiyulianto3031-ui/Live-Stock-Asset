@@ -96,6 +96,10 @@ export const stockMovements = pgTable(
     resi: text("resi"), // JSON array nomor resi pengiriman
     driveLink: text("drive_link"), // link google drive bukti serah terima
     note: text("note"),
+    // Revisi transaksi
+    isRevised: boolean("is_revised").notNull().default(false),
+    revisedAt: timestamp("revised_at"),
+    revisedBy: varchar("revised_by", { length: 150 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
